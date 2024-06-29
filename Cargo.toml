@@ -1,0 +1,9 @@
+[package]
+name = "tower-no-ai"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tower-layer = "0.3.2"
+tower-service = "0.3.2"
+http = "1.1.0"
