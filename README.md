@@ -7,6 +7,7 @@ This can be done with something like the following (with axum):
 ```rust
 use tower_no_ai::NoAiLayer;
 use axum::routing::{get, Router};
+
 let route = Router::new()
 	.route("/", get(hello_world))
 	// route them to a hetzner 10GB speed test file

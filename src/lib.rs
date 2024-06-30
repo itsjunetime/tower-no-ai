@@ -1,3 +1,7 @@
+#![warn(missing_docs)]
+
+#![doc = include_str!("../README.md")]
+
 use std::{
 	future::Future,
 	pin::Pin,
@@ -8,7 +12,8 @@ use http::{header::USER_AGENT, Request, Response, StatusCode};
 use tower_layer::Layer;
 use tower_service::Service;
 
-static AI_AGENTS: [&str; 34] = [
+/// The User-Agent patterns checked for and redirected if present
+pub static AI_AGENTS: &[&str] = &[
 	"AdsBot-Google2",
 	"Amazonbot",
 	"anthropic-ai",
@@ -45,6 +50,7 @@ static AI_AGENTS: [&str; 34] = [
 	"YouBot"
 ];
 
+/// The service which will redirect the requests with matching user agents
 #[derive(Clone)]
 pub struct NoAiService<S> {
 	inner: S,
@@ -90,12 +96,17 @@ where
 	}
 }
 
+/// The [`tower`] layer which can be added to something like an [`axum::Router`]
+///
+/// [`tower`]: https://docs.rs/tower
+/// [`axum::Router`]: https://docs.rs/axum/latest/axum/struct.Router.html
 #[derive(Clone)]
 pub struct NoAiLayer {
 	redir_url: String
 }
 
 impl NoAiLayer {
+	/// Create a new `Self` which will redirect to the given URL when hit
 	pub fn new(redir_url: impl Into<String>) -> Self {
 		Self {
 			redir_url: redir_url.into()
