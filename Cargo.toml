@@ -1,8 +1,15 @@
 [package]
 name = "tower-no-ai"
 version = "0.1.0"
+authors = ["June Welker <junewelker@gmail.com"]
 edition = "2021"
+rust-version = "1.70"
+description = "A tower Service and Layer to redirect all AI scraping bots"
+readme = true
+repository = "https://github.com/itsjunetime/tower-no-ai"
 license = "MIT OR Apache-2.0"
+keywords = ["tower", "axum", "ai"]
+categories = ["web-programming::http-server"]
 
 [dependencies]
 tower-layer = "0.3.2"

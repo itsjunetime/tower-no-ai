@@ -1,8 +1,12 @@
-use std::{future::Future, pin::Pin, task::{Context, Poll}};
+use std::{
+	future::Future,
+	pin::Pin,
+	task::{Context, Poll}
+};
 
+use http::{header::USER_AGENT, Request, Response, StatusCode};
 use tower_layer::Layer;
 use tower_service::Service;
-use http::{header::USER_AGENT, Request, Response, StatusCode};
 
 static AI_AGENTS: [&str; 34] = [
 	"AdsBot-Google2",
@@ -44,17 +48,18 @@ static AI_AGENTS: [&str; 34] = [
 #[derive(Clone)]
 pub struct NoAiService<S> {
 	inner: S,
-	redir_url: String,
+	redir_url: String
 }
 
 impl<S, ReqBody, RespBody> Service<Request<ReqBody>> for NoAiService<S>
 where
 	S: Service<Request<ReqBody>, Response = Response<RespBody>>,
 	S::Future: Send + 'static,
-	RespBody: Default,
+	RespBody: Default
 {
 	type Error = S::Error;
-	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
+	type Future =
+		Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
 	type Response = Response<RespBody>;
 
 	fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -63,7 +68,8 @@ where
 
 	fn call(&mut self, req: Request<ReqBody>) -> Self::Future {
 		// get the user agent
-		req.headers().get(USER_AGENT)
+		req.headers()
+			.get(USER_AGENT)
 			// check if we can actually convert it to a string
 			.and_then(|agent_hdr| agent_hdr.to_str().ok())
 			// and then check that against all of the bad user agents we have stored
@@ -80,9 +86,7 @@ where
 				})
 			})
 			// if it's not a bad user agent, let it continue
-			.unwrap_or_else(move || -> Self::Future {
-				Box::pin(self.inner.call(req))
-			})
+			.unwrap_or_else(move || -> Self::Future { Box::pin(self.inner.call(req)) })
 	}
 }
 
@@ -93,7 +97,9 @@ pub struct NoAiLayer {
 
 impl NoAiLayer {
 	pub fn new(redir_url: impl Into<String>) -> Self {
-		Self { redir_url: redir_url.into() }
+		Self {
+			redir_url: redir_url.into()
+		}
 	}
 }
 
