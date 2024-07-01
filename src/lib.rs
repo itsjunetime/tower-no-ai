@@ -1,11 +1,11 @@
 #![warn(missing_docs)]
-
 #![doc = include_str!("../README.md")]
 
 use std::{
 	future::Future,
 	pin::Pin,
-	task::{Context, Poll}
+	task::{Context, Poll},
+	time::{SystemTime, UNIX_EPOCH}
 };
 
 use http::{header::USER_AGENT, Request, Response, StatusCode};
@@ -54,7 +54,7 @@ pub static AI_AGENTS: &[&str] = &[
 #[derive(Clone)]
 pub struct NoAiService<S> {
 	inner: S,
-	redir_url: String
+	layer: NoAiLayer
 }
 
 impl<S, ReqBody, RespBody> Service<Request<ReqBody>> for NoAiService<S>
@@ -81,8 +81,20 @@ where
 			// and then check that against all of the bad user agents we have stored
 			.is_some_and(|agent| AI_AGENTS.iter().any(|hdr| agent.contains(hdr)))
 			.then(|| -> Self::Future {
-				// if it IS one of the bad user agents, then redirect it to our url
-				let redir_url = self.redir_url.clone();
+				// if it IS one of the bad user agents, then redirect it to our url and add the
+				// extra query on the end to force refetching if we want that
+				let redir_url = if self.layer.force_refetching {
+					format!(
+						"{}?={}",
+						self.layer.redir_url,
+						SystemTime::now()
+							.duration_since(UNIX_EPOCH)
+							.map_or(0, |d| d.as_nanos())
+					)
+				} else {
+					self.layer.redir_url.clone()
+				};
+
 				Box::pin(async {
 					Ok(Response::builder()
 						.status(StatusCode::MOVED_PERMANENTLY)
@@ -102,15 +114,27 @@ where
 /// [`axum::Router`]: https://docs.rs/axum/latest/axum/struct.Router.html
 #[derive(Clone)]
 pub struct NoAiLayer {
-	redir_url: String
+	redir_url: String,
+	force_refetching: bool
 }
 
 impl NoAiLayer {
 	/// Create a new `Self` which will redirect to the given URL when hit
 	pub fn new(redir_url: impl Into<String>) -> Self {
 		Self {
-			redir_url: redir_url.into()
+			redir_url: redir_url.into(),
+			force_refetching: true
 		}
+	}
+
+	/// Force any bots which are caught to re-fetch what ever address you give them by adding a new
+	/// query (which query will change per-request) to the end of it.
+	///
+	/// If `force_refetching` is true, it will force the bot to re-fetch. This is the default. If
+	/// `force_refetching` is false, it will not do so.
+	pub fn force_refetching(mut self, force_refetching: bool) -> Self {
+		self.force_refetching = force_refetching;
+		self
 	}
 }
 
@@ -119,7 +143,7 @@ impl<S> Layer<S> for NoAiLayer {
 	fn layer(&self, inner: S) -> Self::Service {
 		Self::Service {
 			inner,
-			redir_url: self.redir_url.clone()
+			layer: self.clone()
 		}
 	}
 }
