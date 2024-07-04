@@ -4,6 +4,7 @@
 use std::{
 	future::Future,
 	pin::Pin,
+	sync::OnceLock,
 	task::{Context, Poll},
 	time::{SystemTime, UNIX_EPOCH}
 };
@@ -20,6 +21,7 @@ pub static AI_AGENTS: &[&str] = &[
 	"Applebot",
 	"ArcMobile",
 	"AwarioRssBot",
+	"AwarioSmartBot",
 	"Bytespider",
 	"CCBot",
 	"ChatGPT-User",
@@ -27,7 +29,7 @@ pub static AI_AGENTS: &[&str] = &[
 	"ClaudeBot",
 	"cohere-ai",
 	"DataForSeoBot",
-	"DiffBot",
+	"Diffbot",
 	"FacebookBot",
 	"FriendlyCrawler",
 	"Google-Extended",
@@ -146,4 +148,24 @@ impl<S> Layer<S> for NoAiLayer {
 			layer: self.clone()
 		}
 	}
+}
+
+/// Returns the contents of a basic robots.txt file that explicitly disallows all the known AI bots
+/// from accessing anything under the root of this website. Can be added with something like:
+///
+/// ```rust
+/// use axum::routing::{get, Router};
+/// use tower_no_ai::bot_blocking_robots_txt;
+///
+/// let router = Router::new()
+///     .route("robots.txt", get(bot_blocking_robots_txt))
+/// ```
+pub fn bot_blocking_robots_txt() -> &'static str {
+	static STORAGE: OnceLock<String> = OnceLock::new();
+
+	STORAGE.get_or_init(|| {
+		AI_AGENTS.iter().fold(String::new(), |txt, agent| {
+			format!("{txt}User-Agent: {agent}\nDisallow: /\n")
+		})
+	})
 }

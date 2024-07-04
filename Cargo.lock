@@ -39,7 +39,7 @@ checksum = "c20c8dbed6283a09604c3e69b4b7eeb54e298b8a600d4d5ecb5ad39de609f1d0"
 
 [[package]]
 name = "tower-no-ai"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "http",
  "tower-layer",
