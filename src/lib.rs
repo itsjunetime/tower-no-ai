@@ -15,10 +15,13 @@ use tower_service::Service;
 
 /// The User-Agent patterns checked for and redirected if present
 pub static AI_AGENTS: &[&str] = &[
+	"AI2Bot",
+	"Ai2Bot-Dolma",
 	"AdsBot-Google2",
 	"Amazonbot",
 	"anthropic-ai",
 	"Applebot",
+	"Applebot-Extended",
 	"ArcMobile",
 	"AwarioRssBot",
 	"AwarioSmartBot",
@@ -30,24 +33,41 @@ pub static AI_AGENTS: &[&str] = &[
 	"cohere-ai",
 	"DataForSeoBot",
 	"Diffbot",
+	"DuckAssistBot",
 	"FacebookBot",
 	"FriendlyCrawler",
 	"Google-Extended",
 	"Googlebot-Image",
 	"GoogleOther",
+	"GoogleOther-Image",
+	"GoogleOther-Video",
 	"GPTBot",
+	"iaskspider/2.0",
+	"ICC-Crawler",
 	"ImagesiftBot",
 	"img2dataset",
+	"ISSCyberRiskCrawler",
+	"Kangaroo Bot",
+	"Meta-ExternalAgent",
+	"Meta-ExternalFetcher",
+	"OAI-SearchBot",
 	"magpie-crawler",
 	"Meltwater",
 	"msnbot-media",
 	"omgili",
 	"omgilibot",
+	"PanguBot",
 	"peer39_crawler",
 	"PerplexityBot",
+	"PetalBot",
 	"PiplBot",
+	"Scrapy",
 	"Seekr",
+	"Sidetrade indexer bot",
 	"scoop.it",
+	"Timpibot",
+	"VelenPublicWebCrawler",
+	"Webzio-Extended",
 	"yandex",
 	"YouBot"
 ];
@@ -66,8 +86,7 @@ where
 	RespBody: Default
 {
 	type Error = S::Error;
-	type Future =
-		Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
+	type Future = ServiceFut<RespBody, Self::Error, S::Future>;
 	type Response = Response<RespBody>;
 
 	fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -97,16 +116,49 @@ where
 					self.layer.redir_url.clone()
 				};
 
-				Box::pin(async {
-					Ok(Response::builder()
-						.status(StatusCode::MOVED_PERMANENTLY)
-						.header("Location", redir_url)
-						.body(RespBody::default())
-						.unwrap())
-				})
+				ServiceFut::Redirect(redir_url)
 			})
 			// if it's not a bad user agent, let it continue
-			.unwrap_or_else(move || -> Self::Future { Box::pin(self.inner.call(req)) })
+			.unwrap_or_else(move || ServiceFut::Inner(self.inner.call(req)))
+	}
+}
+
+/// The Future type that [`NoAiService::call`] produces. This has the bounds necessary to work
+/// nicely with the [`tower_service::Service`] API requirements for the associated `Future` type.
+pub enum ServiceFut<RespBody, Err, F>
+where
+	RespBody: Default,
+	F: Future<Output = Result<Response<RespBody>, Err>>
+{
+	/// This variant is created when the [`NoAiService`] doesn't find an AI USER_AGENT header in an
+	/// incoming request, and so just forwards the request on to the next service in the stack. The
+	/// `F` type is just the future that that next service returns.
+	Inner(F),
+	/// This variant is created with the [`NoAiService`] DOES find an AI USER_AGENT header and thus
+	/// redirects the request. The wrapped [`String`] is the url that it will be redirected to.
+	Redirect(String)
+}
+
+impl<RespBody, Err, F> Future for ServiceFut<RespBody, Err, F>
+where
+	RespBody: Default,
+	F: Future<Output = Result<Response<RespBody>, Err>>
+{
+	type Output = Result<Response<RespBody>, Err>;
+	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+		// SAFETY: This is safe because we guarantee that we don't move out of the mutable
+		// reference this produces. We just need to match on &mut values here so that we can poll
+		// the inner future.
+		match unsafe { self.get_unchecked_mut() } {
+			Self::Redirect(redir_url) => Poll::Ready(Ok(Response::builder()
+				.status(StatusCode::MOVED_PERMANENTLY)
+				.header("Location", &*redir_url)
+				.body(RespBody::default())
+				.unwrap())),
+			// SAFETY: This is safe because we matched on a reference, so it hasn't moved since we
+			// looked at it inside the `Pin` over `&mut Self` above.
+			Self::Inner(f) => unsafe { Pin::new_unchecked(f) }.poll(cx)
+		}
 	}
 }
 
@@ -134,6 +186,7 @@ impl NoAiLayer {
 	///
 	/// If `force_refetching` is true, it will force the bot to re-fetch. This is the default. If
 	/// `force_refetching` is false, it will not do so.
+	#[must_use]
 	pub fn force_refetching(mut self, force_refetching: bool) -> Self {
 		self.force_refetching = force_refetching;
 		self
